@@ -25,104 +25,163 @@ class ldap::server::config (
 ) {
   include 'ldap::params'
 
-  # Give me dat password to go with all the things
-  if $rootdn { validate_string($rootpw) }
+  if ! $ldap::cn_config {
+    # Give me dat password to go with all the things
+    if $rootdn { validate_string($rootpw) }
 
-  File {
-    owner => 'root',
-    group => $ldap::params::lp_daemon_group,
-    mode  => '0640',
-  }
+    File {
+      owner => 'root',
+      group => $ldap::params::lp_daemon_group,
+      mode  => '0640',
+    }
 
-  file { '/etc/ldap-server':
-    ensure  => file,
-    content => 'openldap',
-  }
+    file { '/etc/ldap-server':
+      ensure  => file,
+      content => 'openldap',
+    }
 
-  file { "${ldap::params::lp_openldap_conf_dir}/slapd.conf":
-    ensure  => file,
-    group   => $ldap::params::lp_daemon_user,
-    content => template('ldap/server/openldap/slapd.conf.erb')
-  }
+    file { "${ldap::params::lp_openldap_conf_dir}/slapd.conf":
+      ensure  => file,
+      group   => $ldap::params::lp_daemon_user,
+      content => template('ldap/server/openldap/slapd.conf.erb')
+    }
 
-  ## Directories to be used for File-Fragment Patterns.
-  ## Contained in this directory for permissions concerns.
-  file { "${ldap::params::lp_openldap_conf_dir}/replication":
-    ensure  => directory,
-    purge   => true,
-    recurse => true,
-  }
-  file { "${ldap::params::lp_openldap_conf_dir}/domains":
-    ensure  => directory,
-    purge   => true,
-    recurse => true,
-  }
-  file { $ldap::params::lp_tmp_dir:
-    ensure  => directory,
-  }
-  file { "${ldap::params::lp_tmp_dir}/schema.d":
-    ensure  => directory,
-    purge   => true,
-    recurse => true,
-  }
-  file { "${ldap::params::lp_tmp_dir}/replication.d":
-    ensure  => directory,
-    purge   => true,
-    recurse => true,
-  }
-  file { "${ldap::params::lp_tmp_dir}/domains.d":
-    ensure  => directory,
-    purge   => true,
-    recurse => true,
-  }
-  file { "${ldap::params::lp_tmp_dir}/acl.d":
-    ensure  => directory,
-    purge   => true,
-    recurse => true,
-  }
-  file {"${ldap::params::lp_openldap_conf_dir}/slapd.d":
-    ensure => 'absent',
-    force  => true,
-  }
+    ## Directories to be used for File-Fragment Patterns.
+    ## Contained in this directory for permissions concerns.
+    file { "${ldap::params::lp_openldap_conf_dir}/replication":
+      ensure  => directory,
+      purge   => true,
+      recurse => true,
+    }
+    file { "${ldap::params::lp_openldap_conf_dir}/domains":
+      ensure  => directory,
+      purge   => true,
+      recurse => true,
+    }
+    file { $ldap::params::lp_tmp_dir:
+      ensure  => directory,
+    }
+    file { "${ldap::params::lp_tmp_dir}/schema.d":
+      ensure  => directory,
+      purge   => true,
+      recurse => true,
+    }
+    file { "${ldap::params::lp_tmp_dir}/replication.d":
+      ensure  => directory,
+      purge   => true,
+      recurse => true,
+    }
+    file { "${ldap::params::lp_tmp_dir}/domains.d":
+      ensure  => directory,
+      purge   => true,
+      recurse => true,
+    }
+    file { "${ldap::params::lp_tmp_dir}/acl.d":
+      ensure  => directory,
+      purge   => true,
+      recurse => true,
+    }
+    file {"${ldap::params::lp_openldap_conf_dir}/slapd.d":
+      ensure => 'absent',
+      force  => true,
+    }
 
-  # These files are here to ensure that a blank file exists
-  # and consecutive service execution and/or executions do not fail out
-  file { "${ldap::params::lp_openldap_conf_dir}/replication.conf":
-    ensure => file,
-    group  => $ldap::params::lp_daemon_group,
-  }
-  file { "${ldap::params::lp_tmp_dir}/replication.d/00_default":
-    ensure => file,
-  }
-  file { "${ldap::params::lp_openldap_conf_dir}/domains.conf":
-    ensure => file,
-    group  => $ldap::params::lp_daemon_group,
-  }
-  file { "${ldap::params::lp_tmp_dir}/domains.d/00_default":
-    ensure => file,
-  }
-  file { "${ldap::params::lp_openldap_conf_dir}/schema.conf":
-    ensure => file,
-    group  => $ldap::params::lp_daemon_group,
-  }
-  file { "${ldap::params::lp_tmp_dir}/schema.d/00_default":
-    ensure => file,
-  }
-  file { "${ldap::params::lp_openldap_conf_dir}/acl.conf":
-    ensure => file,
-    group  => $ldap::params::lp_daemon_group,
-  }
+    # These files are here to ensure that a blank file exists
+    # and consecutive service execution and/or executions do not fail out
+    file { "${ldap::params::lp_openldap_conf_dir}/replication.conf":
+      ensure => file,
+      group  => $ldap::params::lp_daemon_group,
+    }
+    file { "${ldap::params::lp_tmp_dir}/replication.d/00_default":
+      ensure => file,
+    }
+    file { "${ldap::params::lp_openldap_conf_dir}/domains.conf":
+      ensure => file,
+      group  => $ldap::params::lp_daemon_group,
+    }
+    file { "${ldap::params::lp_tmp_dir}/domains.d/00_default":
+      ensure => file,
+    }
+    file { "${ldap::params::lp_openldap_conf_dir}/schema.conf":
+      ensure => file,
+      group  => $ldap::params::lp_daemon_group,
+    }
+    file { "${ldap::params::lp_tmp_dir}/schema.d/00_default":
+      ensure => file,
+    }
+    file { "${ldap::params::lp_openldap_conf_dir}/acl.conf":
+      ensure => file,
+      group  => $ldap::params::lp_daemon_group,
+    }
 
-  file { '/usr/local/bin/openldap_acl_rebuild':
-    ensure  => file,
-    mode    => '0700',
-    content => template('ldap/server/openldap/openldap_acl_rebuild.erb'),
-  }
+    file { '/usr/local/bin/openldap_acl_rebuild':
+      ensure  => file,
+      mode    => '0700',
+      content => template('ldap/server/openldap/openldap_acl_rebuild.erb'),
+    }
 
-  file {$ldap::params::lp_openldap_conf_dir:
-    ensure => directory,
-    mode   => '0755',
-    owner  => 'root',
-    group  => 'root',
+    file {$ldap::params::lp_openldap_conf_dir:
+      ensure => directory,
+      mode   => '0755',
+      owner  => 'root',
+      group  => 'root',
+    }
+  }else{
+
+    include 'apparmor'
+
+    file { "/usr/local/sbin/secret":
+      path    => "/usr/local/sbin/secret",
+      owner   => 'root',
+      group   => 'root',
+      mode    => '0700',
+      require => Package['slapd'],
+      source => 'puppet:///modules/ldap/usr/local/sbin/secret',
+    }
+
+    file { "/usr/local/sbin/setsecret-openldap":
+      path    => "/usr/local/sbin/setsecret-openldap",
+      owner   => 'root',
+      group   => 'root',
+      mode    => '0700',
+      require => [
+        Package['slapd'],
+        File['/usr/local/sbin/secret']
+      ],
+      source => 'puppet:///modules/ldap/usr/local/sbin/setsecret-openldap',
+    }
+
+    file { "/usr/local/sbin/addldapdomain":
+      path    => "/usr/local/sbin/addldapdomain",
+      owner   => 'root',
+      group   => 'root',
+      mode    => '0700',
+      require => [
+        Package['slapd'],
+        Package['ldap-utils'],
+        File['/usr/local/sbin/secret'],
+        File['/usr/local/sbin/setsecret-openldap'],
+        File['/etc/apparmor.d/usr.sbin.slapd'],
+      ],
+      source => 'puppet:///modules/ldap/usr/local/sbin/addldapdomain',
+    }
+
+    if $::operatingsystem == 'Ubuntu' {
+      file { "/etc/apparmor.d/usr.sbin.slapd":
+        path    => "/etc/apparmor.d/usr.sbin.slapd",
+        owner   => 'root',
+        group   => 'root',
+        mode    => '0644',
+        require => [
+          Package['slapd'],
+          Package['ldap-utils'],
+          File['/usr/local/sbin/secret'],
+          File['/usr/local/sbin/setsecret-openldap'],
+        ],
+        source => 'puppet:///modules/ldap/etc/apparmor.d/usr.sbin.slapd',
+        notify => Class['apparmor'],
+      }
+    }
+
   }
 }

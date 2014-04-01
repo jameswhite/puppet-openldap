@@ -27,24 +27,40 @@ define ldap::define::schema(
   $ensure = 'present',
   $source = undef,
 ) {
-
   include ldap::params
-  File {
-    owner   => 'root',
-    group   => $ldap::params::lp_daemon_group,
-    before  => Class['ldap::server::rebuild'],
-    require => Class['ldap::server::config'],
-  }
+  if ! $ldap::cn_config {
+    File {
+      owner   => 'root',
+      group   => $ldap::params::lp_daemon_group,
+      before  => Class['ldap::server::rebuild'],
+      require => Class['ldap::server::config'],
+    }
 
-  file { "${ldap::params::lp_tmp_dir}/schema.d/${name}.schema":
-    ensure  => $ensure,
-    content => "include ${ldap::params::lp_openldap_conf_dir}/schema/${name}.schema\n",
-    notify  => Class['ldap::server::rebuild'],
-  }
+    file { "${ldap::params::lp_tmp_dir}/schema.d/${name}.schema":
+      ensure  => $ensure,
+      content => "include ${ldap::params::lp_openldap_conf_dir}/schema/${name}.schema\n",
+      notify  => Class['ldap::server::rebuild'],
+    }
 
-  file { "${ldap::params::lp_openldap_conf_dir}/schema/${name}.schema":
-    ensure => $ensure,
-    source => $source,
-    notify => Class['ldap::server::service'],
+    file { "${ldap::params::lp_openldap_conf_dir}/schema/${name}.schema":
+      ensure => $ensure,
+      source => $source,
+      notify => Class['ldap::server::service'],
+    }
+
+  }else{
+
+    file { "${ldap::params::lp_openldap_conf_dir}/schema/${name}.schema":
+      ensure => $ensure,
+      source => $source,
+      notify => Exec["addldapschema-${name}"],
+    }
+
+    exec { "addldapschema-${name}":
+      command     => "addldapschema ${ldap::params::lp_openldap_conf_dir}/schema/${name}.schema",
+      refreshonly => true,
+      path        => '/usr/local/sbin:/usr/sbin:/sbin',
+    }
+
   }
 }

@@ -1,0 +1,105 @@
+#!/bin/bash
+################################################################################
+LDAP_ROOT_CMD_OPTS='-Y EXTERNAL -H ldapi:///'
+LDAP_USER="openldap"
+LDAP_GROUP="openldap"
+DB_DIR="/var/lib/ldap.d"
+################################################################################
+# get the domain from the command line
+DOMAIN=$(echo "$1" | tr 'A-Z' 'a-z')
+if [ -z "${DOMAIN}" ]; then
+  echo "  Usage: $0 <domain>"
+  echo "Example: $0 github.net"
+  exit 2
+fi
+# derive the base DN from the domain
+BASEDN="dc=$(echo "${DOMAIN}" | sed -e 's/\./,dc=/g')"
+# derive the first domain component from the domain
+DC=$(echo "${DOMAIN}" | sed -e 's/\..*//')
+# derive the ldap admin from the basedn
+LDAP_URI="ldap://127.0.0.1:389"
+LDAP_ADMIN_DN="cn=admin,${BASEDN}"
+LDAP_ADMIN_PW="$(secret ${DOMAIN})"
+# we have to create the directory for the database to be stored.
+# UGH http://ubuntuforums.org/showthread.php?t=1492043
+[ ! -d ${DB_DIR} ] && mkdir ${DB_DIR}; chown ${LDAP_USER}:${LDAP_GROUP} ${DB_DIR};
+[ ! -d ${DB_DIR}/${DOMAIN} ] && mkdir ${DB_DIR}/${DOMAIN} ; chown ${LDAP_USER}:${LDAP_GROUP} ${DB_DIR}/${DOMAIN};
+
+# created the database ldif
+TMPLDIF=$(mktemp /tmp/ldapadddomain.XXXX)
+echo $TMPLDIF
+cat<<EOF > ${TMPLDIF}
+dn: olcDatabase=hdb,cn=config
+objectClass: olcDatabaseConfig
+objectClass: olcHdbConfig
+olcDatabase: hdb
+olcDbDirectory: ${DB_DIR}/${DOMAIN}
+olcSuffix: ${BASEDN}
+olcAccess: {0}to attrs=userPassword  by self write  by anonymous auth  by dn.base="${LDAP_ADMIN_DN}" write  by * none
+olcAccess: {1}to dn.base="" by * read
+olcAccess: {2}to *  by self write  by dn.base="${LDAP_ADMIN_DN}" write  by * read
+olcLastMod: TRUE
+olcRootDN: cn=admin,${BASEDN}
+olcRootPW:: $(slappasswd -s $(/usr/local/sbin/secret ${DOMAIN}) | /usr/bin/base64)
+olcDbCheckpoint: 512 30
+olcDbConfig: {0}set_cachesize 0 2097152 0
+olcDbConfig: {1}set_lk_max_objects 1500
+olcDbConfig: {2}set_lk_max_locks 1500
+olcDbConfig: {3}set_lk_max_lockers 1500
+EOF
+# We make LDAP aware of the database with the cn=root account because it is the only thing with the rights to cn=config
+ldapsearch ${LDAP_ROOT_CMD_OPTS} -b "cn=config" | grep "olcSuffix: ${BASEDN}" >/dev/null 2>&1 || ldapadd ${LDAP_ROOT_CMD_OPTS} -f "${TMPLDIF}"
+ldapsearch ${LDAP_ROOT_CMD_OPTS} -b "cn=config" | grep "olcSuffix: ${BASEDN}" >/dev/null 2>&1 || exit 3;
+
+
+# popiulate the naming context
+cat<<EOF > "${TMPLDIF}"
+dn: ${BASEDN}
+objectClass: top
+objectClass: dcObject
+objectClass: organization
+o: ${DOMAIN}
+dc: ${DC}
+description: ${DOMAIN}
+EOF
+ldapsearch -xLLH "${LDAP_URI}" -D "${LDAP_ADMIN_DN}" -w"${LDAP_ADMIN_PW}" -b "${BASEDN}" -s base "(${BASEDN})" >/dev/null 2>&1 || \
+  ldapadd -xH "${LDAP_URI}" -D "${LDAP_ADMIN_DN}" -w"${LDAP_ADMIN_PW}"  -f "${TMPLDIF}" 
+ldapsearch -xLLH "${LDAP_URI}" -D "${LDAP_ADMIN_DN}" -w"${LDAP_ADMIN_PW}" -b "${BASEDN}" -s base "(${BASEDN})" >/dev/null 2>&1 || exit 3
+
+#add ou=People
+cat<<EOF > "${TMPLDIF}"
+dn: ou=People,${BASEDN}
+objectClass: organizationalUnit
+ou: people
+EOF
+ldapsearch -xLLH "${LDAP_URI}" -D "${LDAP_ADMIN_DN}" -w"${LDAP_ADMIN_PW}" -b "${BASEDN}" -s one | grep -i "ou: People" >/dev/null 2>&1 || \
+  ldapadd -xH "${LDAP_URI}" -D "${LDAP_ADMIN_DN}" -w"${LDAP_ADMIN_PW}" -f "${TMPLDIF}"
+ldapsearch -xLLH "${LDAP_URI}" -D "${LDAP_ADMIN_DN}" -w"${LDAP_ADMIN_PW}" -b "${BASEDN}" -s one | grep -i "ou: People" >/dev/null 2>&1 || exit 4
+
+cat<<EOF > "${TMPLDIF}"
+dn: ou=Groups,${BASEDN}
+objectClass: organizationalUnit
+ou: groups
+EOF
+ldapsearch -xLLH "${LDAP_URI}" -D "${LDAP_ADMIN_DN}" -w"${LDAP_ADMIN_PW}" -b "${BASEDN}" -s one | grep -i "ou: Groups" >/dev/null 2>&1 || \
+  ldapadd -xH "${LDAP_URI}" -D "${LDAP_ADMIN_DN}" -w"${LDAP_ADMIN_PW}" -f "${TMPLDIF}"
+ldapsearch -xLLH "${LDAP_URI}" -D "${LDAP_ADMIN_DN}" -w"${LDAP_ADMIN_PW}" -b "${BASEDN}" -s one | grep -i "ou: Groups" >/dev/null 2>&1 || exit 5
+
+cat<<EOF > /tmp/${DOMAIN}.init.ldif
+dn: uid=test,ou=people,${BASEDN}
+objectClass: inetOrgPerson
+uid: test
+cn: I. Test User
+cn: Test User
+sn: User
+mail: test@${DOMAIN}
+EOF
+
+ldapsearch -xLLH "${LDAP_URI}" -D "${LDAP_ADMIN_DN}" -w"${LDAP_ADMIN_PW}" -b "ou=people,${BASEDN}" -s one "(uid=test)"| grep "^dn:" >/dev/null 2>&1 || \
+  ldapadd -xH "${LDAP_URI}" -D "${LDAP_ADMIN_DN}" -w"${LDAP_ADMIN_PW}"  -f /tmp/${DOMAIN}.init.ldif
+ldapsearch -xLLH "${LDAP_URI}" -D "${LDAP_ADMIN_DN}" -w"${LDAP_ADMIN_PW}" -b "ou=people,${BASEDN}" -s one "(uid=test)"| grep "^dn:" >/dev/null 2>&1 || exit 6
+
+################################################################################
+[ -f "${TMPLDIF}" ] && /bin/rm "${TMPLDIF}"; 
+exit 0
+################################################################################
